@@ -1,0 +1,27 @@
+# Ignore Python bytecode files
+__pycache__/
+*.pyc
+*.pyo
+*.pytest_cache
+
+# Ignore virtual environment directories
+venv/
+.venv/
+
+# Ignore IDE-specific files (e.g., PyCharm)
+.idea/
+*.iml
+
+# Ignore logs and temporary files
+*.log
+*.tmp
+
+# Ignore distribution/build folders
+build/
+dist/
+*.egg-info/
+
+# Ignore environment variables files
+.env
+.env.*
+
