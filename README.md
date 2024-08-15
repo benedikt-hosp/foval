@@ -70,15 +70,16 @@ notebooks/: Jupyter notebooks for exploratory data analysis and experiments.
 
 src/: Source code, including feature extraction, model training, and evaluation scripts.
 
-	- FOVAL_Trainer.py: Handles the training process, including data loading, model training, validation, and saving results.
+	FOVAL_Trainer.py: Handles the training process, including data loading, model training, validation, and saving results.
 
-	- RobustVision_Dataset.py: Contains functions for data preprocessing, feature extraction, and sequence generation.
+	RobustVision_Dataset.py: Contains functions for data preprocessing, feature extraction, and sequence generation.
 
-	- SimpleLSTM.py: Defines the LSTM-based model used for focal depth estimation.
+	SimpleLSTM.py: Defines the LSTM-based model used for focal depth estimation.
 
-	- Utilities.py: Includes utility functions for data handling, model definition, and results analysis.
+	Utilities.py: Includes utility functions for data handling, model definition, and results analysis.
 
-	- main.py: The main script that integrates all components to run the training and evaluation pipeline.
+	main.py: The main script that integrates all components to run the training and evaluation pipeline.
+	
 - models/: Directory to store pre-trained or saved models.
 - results/: Directory where output results, logs, and saved activations are stored.
 - environment.yml: Conda environment setup file.
