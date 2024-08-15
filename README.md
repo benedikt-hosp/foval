@@ -13,6 +13,7 @@ This project implements a model for focal depth estimation. The model is trained
 6. [License](#license)
 7. [Contributing](#contributing)
 8. [Contact](#contact)
+9. [Citation](#citation)
 
 ## 1. Introduction
 
@@ -62,7 +63,7 @@ Training progress, including loss and accuracy metrics, will be logged and can b
 ### Saving and Using Model Activations
 The model is configured to save intermediate activations during the validation phase. These activations can be used for tasks such as feature importance analysis or visualizing how the model processes the input data.
 
-### Project Structure
+### 5. Project Structure
 data/: Contains data files or datasets.
 
 notebooks/: Jupyter notebooks for exploratory data analysis and experiments.
@@ -82,7 +83,7 @@ src/: Source code, including feature extraction, model training, and evaluation 
 - results/: Directory where output results, logs, and saved activations are stored.
 - environment.yml: Conda environment setup file.
 
-## 4. Detailed Code Description
+## 6. Detailed Code Description
 #### FOVAL_Trainer.py
 This script manages the entire training process:
 
@@ -115,12 +116,23 @@ Includes various utility functions:
 - **Model Definition:** Functions for setting up the LSTM model and its optimizer.
 - **Results Analysis:** Functions to analyze and visualize model predictions and errors
 
-## 5. License
+## 7. License
 This project is licensed under the terms of the Creative Commons Attribution 4.0 International (CC BY 4.0) license. You are free to share and adapt the material as long as appropriate credit is given.
 
-## 6. Contributing
+## 8. Contributing
 Contributions are welcome! Please open an issue or submit a pull request for any bug fixes, features, or improvements.
 
 
 
 
+## 9. Citation
+
+If you use this code or find our work helpful, please consider citing:
+
+```bibtex
+@article{hosp2024focal,
+  title={Focal Depth Estimation: A Calibration-Free, Subject-and Daytime Invariant Approach},
+  author={Hosp, Benedikt W and Severitt, Bj{\"o}rn and Agarwala, Rajat and Rusak, Evgenia and Sauer, Yannick and Wahl, Siegfried},
+  journal={arXiv preprint arXiv:2408.03591},
+  year={2024}
+}
