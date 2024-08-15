@@ -28,10 +28,10 @@ FOVAL is focused on estimating focal depth using a sequence of visual data point
 
 1. **Clone the repository:**
 
-   ```bash
-   git clone https://github.com/benedikt-hosp/foval.git
-   cd FOVAL
-   ```
+```bash
+git clone https://github.com/benedikt-hosp/foval.git
+cd FOVAL
+```
    
 2. **Setup the conda environment:**
 ```
