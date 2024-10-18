@@ -25,3 +25,6 @@ dist/
 .env
 .env.*
 
+=======
+/FOVAL_test/results/
+/FOVAL_test/cache_dir/
