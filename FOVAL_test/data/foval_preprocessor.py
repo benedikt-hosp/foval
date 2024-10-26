@@ -590,7 +590,7 @@ def createFeatures(data_in, isGIW=False):
     data_in['Acceleration_Gaze_Direction_R_Z'] = data_in['Velocity_Gaze_Direction_R_Z'].diff().fillna(0)
 
     # print("NaN count per column before dropping NaNs:")
-    print(data_in.isna().sum())
+    # print(data_in.isna().sum())
     data_in = data_in.dropna()
 
     data_in = data_in.replace([np.inf, -np.inf], np.nan)
@@ -600,8 +600,8 @@ def createFeatures(data_in, isGIW=False):
                          'World_Gaze_Origin_L_Z']
 
     data_in = data_in[input_features]
-    print("Preprocessor: Size of created features: ", data_in.shape)
-    print("Preprocessor: Features ", data_in.columns)
+    # print("Preprocessor: Size of created features: ", data_in.shape)
+    # print("Preprocessor: Features ", data_in.columns)
 
     return data_in
 

@@ -75,7 +75,7 @@ class FOVALTrainer:
         with open(config_path, 'r') as f:
             hyper_parameters = json.load(f)
         self.hyperparameters = hyper_parameters
-        self.batch_size = hyper_parameters['batch_size']
+        self.batch_size = 12  # hyper_parameters['batch_size']
         self.learning_rate = hyper_parameters['learning_rate']
         self.weight_decay = hyper_parameters['weight_decay']
         self.fc1_dim = hyper_parameters['fc1_dim']
@@ -95,6 +95,12 @@ class FOVALTrainer:
         )
 
     def save_activations_and_weights(self, intermediates, filename, file_path):
+        """
+
+        @param intermediates:
+        @param filename:
+        @param file_path:
+        """
         save_path_tensors = os.path.join(file_path, f"{filename}_activations.pt")
         save_path_numpy = os.path.join(file_path, f"{filename}_weights.pkl")
 

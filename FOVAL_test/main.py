@@ -67,7 +67,6 @@ def estimate_dynamic_gaze_origin(pog, dir_L, dir_R):
     return origin_L, origin_R
 
 
-
 def process_mat_files(input_folder, output_folder):
     # Ensure the output folder exists
     os.makedirs(output_folder, exist_ok=True)
@@ -178,7 +177,6 @@ def process_mat_files(input_folder, output_folder):
             continue
 
 
-
 def delete_folder_contents(folder_path):
     # Ensure the folder exists
     if os.path.exists(folder_path):
@@ -264,7 +262,8 @@ def process_gaze360_mat_data_fixed(mat_data, output_folder):
     df['person_identity'] = person_identities
 
     # Use Gaze Origins for clustering
-    gaze_origins = df[['World_Gaze_Origin_L_X', 'World_Gaze_Origin_L_Z', 'World_Gaze_Origin_R_X', 'World_Gaze_Origin_R_Z']].values
+    gaze_origins = df[
+        ['World_Gaze_Origin_L_X', 'World_Gaze_Origin_L_Z', 'World_Gaze_Origin_R_X', 'World_Gaze_Origin_R_Z']].values
 
     # Step 1: Apply KMeans clustering to merge participants into 238 groups
     kmeans = KMeans(n_clusters=238, random_state=42)
@@ -329,6 +328,11 @@ def clear_output_folder(output_folder):
 
 
 def process_tufts_data(input_file, output_folder):
+    """
+
+    @param input_file:
+    @param output_folder:
+    """
     # Load the dataset
     df = pd.read_csv(input_file)
 
@@ -373,10 +377,11 @@ def process_tufts_data(input_file, output_folder):
         subject_data.to_csv(output_file, index=False, sep="\t")
         print(f"Saved data for Subject {i + 1} to {output_file}")
 
+
 def main():
     seed_everything(seed=42)
     device = setup_device()
-    n_epochs = 300
+    n_epochs = 250
 
     # Only needed once
 
@@ -399,6 +404,7 @@ def main():
     # mat_file = 'data/input/gaze360/raw/metadata.mat'
     # output_folder = 'data/input/gaze360/parsed_to_csv/'
     # process_gaze360_mat_data_fixed(mat_file, output_folder)
+    # dataset = Gaze360Dataset(data_dir="data/input/gaze360/", test_split_size=10)
 
     '''
      Prepare Tufts Dataset
@@ -410,10 +416,11 @@ def main():
     # process_tufts_data(input_file, output_folder)
 
     # Load and prepare dataset
-    # dataset = RobustVisionDataset(data_dir="data/input/robustvision/")                    # 9.1 avg
-    dataset = GIWDataset(data_dir="data/input/gaze_in_wild/", trial_name="T4_tea_making")
-    # dataset = Gaze360Dataset(data_dir="data/input/gaze360/", test_split_size=10)
-    # dataset = TuftsDataset(data_dir="data/input/tufts/", test_split_size=10)
+    # dataset = RobustVisionDataset(data_dir="data/input/robustvision/")  # 9.1 avg MAE with bs=460, ca. 20 avg MAE bs=12
+    # dataset = GIWDataset(data_dir="data/input/gaze_in_wild/", trial_name="T4_tea_making")
+    dataset = GIWDataset(data_dir="data/input/gaze_in_wild/", trial_name="T2_ball_catch")
+
+    # dataset = TuftsDataset(data_dir="data/input/tufts/", test_split_size=10)       #  10.00 avg MAE with bs=12
 
     dataset.load_data()
 
@@ -428,3 +435,17 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+'''
+CVPR Evaluation
+1. Each Dataset on its own LOOCV
+    - RV: 9.1 cm avg MAE
+    - GIW: 
+    - TUFTS:
+2. Cross-dataset generalization
+    - TUFTS for training, RV for evaluation
+3. Mixed eval: LOOCV über alle Personen aus allen Datensätzen
+    
+    
+
+'''
