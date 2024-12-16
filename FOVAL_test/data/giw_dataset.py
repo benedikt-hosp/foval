@@ -185,7 +185,7 @@ class GIWDataset(AbstractDatasetClass):
         @param data_in:
         @return:
         """
-        data_in = createFeatures(data_in, isGIW=True)
+        # data_in = createFeatures(data_in, isGIW=True)
 
         return data_in
 

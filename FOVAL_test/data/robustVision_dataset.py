@@ -38,8 +38,7 @@ class RobustVisionDataset(AbstractDatasetClass):
         self.maxDepth = 3
         self.subject_scaler = RobustScaler()  # or any other scaler
         self.feature_scaler = None
-        self.isGIW= True # für mixed muss das auf True stehen sonst False
-
+        self.isGIW= False # für mixed muss das auf True stehen sonst False
         self.target_scaler = None
         self.target_column_name = 'Gt_Depth'
         self.subject_id_column = 'SubjectID'
@@ -137,7 +136,7 @@ class RobustVisionDataset(AbstractDatasetClass):
         @param data_in:
         @return:
         """
-        data_in = createFeatures(data_in, isGIW=self.isGIW)
+        # data_in = createFeatures(data_in, isGIW=self.isGIW)
 
         return data_in
 

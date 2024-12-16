@@ -82,10 +82,7 @@ class MixedDatasetClass(AbstractDatasetClass):
     # 1.
     def load_data(self):
         """
-        Read and aggregate data from multiple subjects.
-
-        :param data_dir: Directory containing the subject folders.
-        :return: Combined dataframe of all subjects.
+        Read and aggregate data from multiple subjects and compute or load features.
         """
         print("Reading and aggregating data...")
 
@@ -93,42 +90,58 @@ class MixedDatasetClass(AbstractDatasetClass):
         dataset_a = RobustVisionDataset(data_dir="data/input/robustvision/")
         dataset_a.load_data()
         data_a = dataset_a.input_data
+        features_a = self.create_features(data_a, isGIW=False)
+        self.save_features(features_a, "RV_features.pkl")  # Optional: Save features
         subjects_a = dataset_a.subject_list
 
         # GIW Dataset
         dataset_b = GIWDataset(data_dir="data/input/gaze_in_wild/", trial_name="T4_tea_making")
         dataset_b.load_data()
         data_b = dataset_b.input_data
+        features_b = self.create_features(data_b, isGIW=True)
+        self.save_features(features_b, "GIW_features.pkl")  # Optional: Save features
         subjects_b = dataset_b.subject_list
 
         # Tufts Dataset
         dataset_c = TuftsDataset(data_dir="data/input/tufts/", test_split_size=10)
         dataset_c.load_data()
         data_c = dataset_c.input_data
+        features_c = self.create_features(data_c, isGIW=False)  # Assuming Tufts is not GIW
+        self.save_features(features_c, "Tufts_features.pkl")  # Optional: Save features
         subjects_c = dataset_c.subject_list
 
+        print("Columns in data_a:", data_a.columns)
+        print("Columns in data_b:", data_b.columns)
+        print("Columns in data_c:", data_c.columns)
+
+        # Konsistenz der Spalten prüfen
+        # if not (features_a.columns.equals(features_b.columns) and features_b.columns.equals(features_c.columns)):
+        #     raise ValueError("Feature sets have inconsistent columns!")
+
         # Combine input_data from all datasets
-        # self.input_data = pd.concat([data_a, data_b, data_c], ignore_index=True)
-        self.input_data = pd.concat([data_a, data_c], ignore_index=True)
-        # self.input_data = data_a # pd.concat(data_a, ignore_index=True)
+        self.input_data = pd.concat([features_a, features_b, features_c], ignore_index=True)
+        # self.input_data = pd.concat([features_a, features_c], ignore_index=True)
 
 
         # Combine subjects from all datasets
-        self.subject_list = pd.unique(pd.concat([pd.Series(subjects_a),
-                                                # pd.Series(subjects_b),
-                                                 pd.Series(subjects_c)
-                                                 ]))
+        self.subject_list = pd.unique(pd.concat([
+            pd.Series(subjects_a), pd.Series(subjects_b), pd.Series(subjects_c)
+        ]))
 
         print("Finished aggregating data.")
         print(f"Total subjects: {len(self.subject_list)}")
         print(f"Total data points: {len(self.input_data)}")
 
-        # Robust vs Tufts
+        # Optional: Check for missing values
+        if self.input_data.isnull().any().any():
+            print("Warning: Missing values detected in the combined dataset.")
+
+    def save_features(self, features, filename):
+        features.to_pickle(filename)
+        print(f"Features saved to {filename}")
 
 
-
-    # 2.
-    def create_features(self, data_in):
+    def create_features(self, data_in, isGIW=False):
         """
         Generate features from the input data.
 
@@ -137,7 +150,7 @@ class MixedDatasetClass(AbstractDatasetClass):
         @param data_in:
         @return:
         """
-        data_in = createFeatures(data_in, isGIW=False)
+        data_in = createFeatures(data_in, isGIW=isGIW)
 
         return data_in
 
@@ -340,8 +353,6 @@ class MixedDatasetClass(AbstractDatasetClass):
         if data.empty:
             raise ValueError(f"No data found for subjects: {subjects}")
 
-        # Feature creation and normalization
-        data = self.create_features(data)
         # if is_train:
         #     data.to_csv('checkpoint_features_2.csv')
 

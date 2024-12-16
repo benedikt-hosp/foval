@@ -442,7 +442,7 @@ def normalize_subject_data(subject_data, scaler):
 #     return training_set_normalized, validation_set_normalized
 #
 
-def createFeatures(data_in, isGIW=False):
+def createFeatures(data_in, isGIW=True):
     if isGIW:
         # Calculate vergence depth for rows where depth is unknown
         data_in['Vergence_Angle'], data_in['Vergence_Depth'] = zip(
@@ -596,8 +596,15 @@ def createFeatures(data_in, isGIW=False):
     data_in = data_in.replace([np.inf, -np.inf], np.nan)
     data_in = data_in.dropna()
     # Define excluded features
-    excluded_features = ['World_Gaze_Origin_R_X', 'World_Gaze_Origin_R_Z', 'World_Gaze_Origin_L_X',
-                         'World_Gaze_Origin_L_Z']
+    # excluded_features = ['World_Gaze_Origin_R_X', 'World_Gaze_Origin_R_Z', 'World_Gaze_Origin_L_X',
+    #                      'World_Gaze_Origin_L_Z']
+
+    # Drop unnecessary columns after feature creation
+    columns_to_drop = [
+        'World_Gaze_Origin_R_X', 'World_Gaze_Origin_R_Y', 'World_Gaze_Origin_R_Z',
+        'World_Gaze_Origin_L_X', 'World_Gaze_Origin_L_Y', 'World_Gaze_Origin_L_Z'
+    ]
+    data_in = data_in.drop(columns=[col for col in columns_to_drop if col in data_in.columns])
 
     data_in = data_in[input_features]
     # print("Preprocessor: Size of created features: ", data_in.shape)
