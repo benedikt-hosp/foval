@@ -13,9 +13,12 @@ from sklearn.preprocessing import (
 import warnings
 
 from data.AbstractDatasetClass import AbstractDatasetClass
+from data.TuftsDataset import TuftsDataset
 from data.foval_preprocessor import remove_outliers_in_labels, binData, createFeatures, \
     detect_and_remove_outliers_in_features_iqr, clean_data, global_normalization, subject_wise_normalization, \
     separate_features_and_targets
+from data.giw_dataset import GIWDataset
+from data.robustVision_dataset import RobustVisionDataset
 from data.utilities import create_lstm_tensors_dataset, create_dataloaders_dataset
 
 warnings.filterwarnings("ignore")
@@ -23,8 +26,8 @@ pd.set_option('display.max_columns', None)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-class RobustVisionDataset(AbstractDatasetClass):
-    def __init__(self, data_dir):
+class MixedDatasetClass(AbstractDatasetClass):
+    def __init__(self):
         """
         Initialize the RobustVisionDataset class.
 
@@ -32,14 +35,11 @@ class RobustVisionDataset(AbstractDatasetClass):
         self.input_data = None
         self.subject_list = None
         self.sequence_length = 10  # sequence_length
-        self.data_dir = data_dir
         self.best_transformers = None
         self.minDepth = 0.35  # in meter
         self.maxDepth = 3
         self.subject_scaler = RobustScaler()  # or any other scaler
         self.feature_scaler = None
-        self.isGIW= True # für mixed muss das auf True stehen sonst False
-
         self.target_scaler = None
         self.target_column_name = 'Gt_Depth'
         self.subject_id_column = 'SubjectID'
@@ -88,44 +88,44 @@ class RobustVisionDataset(AbstractDatasetClass):
         :return: Combined dataframe of all subjects.
         """
         print("Reading and aggregating data...")
-        all_data = []
-        for subj_folder in os.listdir(self.data_dir):
-            subj_path = os.path.join(self.data_dir, subj_folder)
-            if os.path.exists(subj_path):
-                depthCalib_path = os.path.join(subj_path, "depthCalibration.csv")
-                if os.path.exists(depthCalib_path):
-                    df = pd.read_csv(depthCalib_path, delimiter="\t")
-                    df.rename(columns=lambda x: x.strip().replace(' ', '_').title(), inplace=True)
-                    # df.rename(columns=lambda x: x.replace(' ', '_'), inplace=True)
 
-                    starting_columns = [
-                        'Gt_Depth', 'World_Gaze_Direction_L_X', 'World_Gaze_Direction_L_Y',
-                        'World_Gaze_Direction_L_Z', 'World_Gaze_Direction_R_X', 'World_Gaze_Direction_R_Y',
-                        'World_Gaze_Direction_R_Z', 'World_Gaze_Origin_R_X', 'World_Gaze_Origin_R_Z',
-                        'World_Gaze_Origin_L_X', 'World_Gaze_Origin_L_Z'
-                    ]
+        # Robust Vision Dataset
+        dataset_a = RobustVisionDataset(data_dir="data/input/robustvision/")
+        dataset_a.load_data()
+        data_a = dataset_a.input_data
+        subjects_a = dataset_a.subject_list
 
-                    # self.clean_column_names(df_depthEval)
-                    df = df[starting_columns]
-                    for col in starting_columns:
-                        df[col] = df[col].astype(float)
+        # GIW Dataset
+        dataset_b = GIWDataset(data_dir="data/input/gaze_in_wild/", trial_name="T4_tea_making")
+        dataset_b.load_data()
+        data_b = dataset_b.input_data
+        subjects_b = dataset_b.subject_list
 
-                    df.rename(columns=lambda x: x.replace(' ', '_'), inplace=True)
+        # Tufts Dataset
+        dataset_c = TuftsDataset(data_dir="data/input/tufts/", test_split_size=10)
+        dataset_c.load_data()
+        data_c = dataset_c.input_data
+        subjects_c = dataset_c.subject_list
 
-                    df = df[starting_columns].astype(float)
-                    df2 = clean_data(df, target_column_name=self.target_column_name, multiplication=self.multiplicator)
-                    df3 = remove_outliers_in_labels(df2, window_size=5, threshold=10,
-                                                    target_column_name=self.target_column_name)
-                    df4 = detect_and_remove_outliers_in_features_iqr(df3)
-                    df5 = binData(df4, False)
-                    df5['SubjectID'] = subj_folder
-                    all_data.append(df5)
+        # Combine input_data from all datasets
+        # self.input_data = pd.concat([data_a, data_b, data_c], ignore_index=True)
+        self.input_data = pd.concat([data_a, data_c], ignore_index=True)
+        # self.input_data = data_a # pd.concat(data_a, ignore_index=True)
 
-        self.input_data = pd.concat(all_data, ignore_index=True)
-        print("Finished loading input data.")
-        self.subject_list = self.input_data['SubjectID'].unique()
 
-        return self.input_data
+        # Combine subjects from all datasets
+        self.subject_list = pd.unique(pd.concat([pd.Series(subjects_a),
+                                                # pd.Series(subjects_b),
+                                                 pd.Series(subjects_c)
+                                                 ]))
+
+        print("Finished aggregating data.")
+        print(f"Total subjects: {len(self.subject_list)}")
+        print(f"Total data points: {len(self.input_data)}")
+
+        # Robust vs Tufts
+
+
 
     # 2.
     def create_features(self, data_in):
@@ -137,7 +137,7 @@ class RobustVisionDataset(AbstractDatasetClass):
         @param data_in:
         @return:
         """
-        data_in = createFeatures(data_in, isGIW=self.isGIW)
+        data_in = createFeatures(data_in, isGIW=False)
 
         return data_in
 
@@ -344,6 +344,7 @@ class RobustVisionDataset(AbstractDatasetClass):
         data = self.create_features(data)
         # if is_train:
         #     data.to_csv('checkpoint_features_2.csv')
+
         data = self.normalize_data(data)
 
         # Apply transformations if necessary

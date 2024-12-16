@@ -42,6 +42,7 @@ class TuftsDataset(AbstractDatasetClass):
         self.sequence_length = 10  # sequence_length
         self.data_dir = data_dir
         self.best_transformers = None
+        self.isGIW= True # für mixed muss das auf True stehen sonst False
         self.minDepth = 0.35  # in meter
         self.maxDepth = 3
         self.subject_scaler = RobustScaler()  # or any other scaler
@@ -183,7 +184,7 @@ class TuftsDataset(AbstractDatasetClass):
         @param data_in:
         @return:
         """
-        data_in = createFeatures(data_in, isGIW=False)
+        data_in = createFeatures(data_in, isGIW=self.isGIW)
 
         return data_in
 

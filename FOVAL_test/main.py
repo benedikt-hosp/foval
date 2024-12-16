@@ -2,6 +2,7 @@ import random
 import torch
 from sklearn.cluster import KMeans
 
+from data.MixedDatasetClass import MixedDatasetClass
 from data.TuftsDataset import TuftsDataset
 from data.foval_preprocessor import input_features
 from data.giw_dataset import GIWDataset
@@ -379,12 +380,6 @@ def process_tufts_data(input_file, output_folder):
 
 
 def main():
-    seed_everything(seed=42)
-    device = setup_device()
-    n_epochs = 250
-
-    # Only needed once
-
     '''
     Prepare GIW dataset
     '''
@@ -416,11 +411,16 @@ def main():
     # process_tufts_data(input_file, output_folder)
 
     # Load and prepare dataset
-    # dataset = RobustVisionDataset(data_dir="data/input/robustvision/")  # 9.1 avg MAE with bs=460, ca. 20 avg MAE bs=12
-    # dataset = GIWDataset(data_dir="data/input/gaze_in_wild/", trial_name="T4_tea_making")
-    dataset = GIWDataset(data_dir="data/input/gaze_in_wild/", trial_name="T2_ball_catch")
+    # RobustVision Data
+    # Results: 9.1 avg MAE with bs=460, ca. 20 avg MAE bs=12
+    # dataset = RobustVisionDataset(data_dir="data/input/robustvision/")
 
-    # dataset = TuftsDataset(data_dir="data/input/tufts/", test_split_size=10)       #  10.00 avg MAE with bs=12
+    # GIW
+    # dataset = GIWDataset(data_dir="data/input/gaze_in_wild/", trial_name="T4_tea_making")
+    # Results: 9.25 cm avg MAE with bs=460
+
+    # TUFTS Data
+    dataset = TuftsDataset(data_dir="data/input/tufts/", test_split_size=10)       #  10.00 avg MAE with bs=12
 
     dataset.load_data()
 
@@ -433,8 +433,41 @@ def main():
     print(f"Model Average Mean Absolute Error: {mean_mae}")
 
 
+def main_total_dataset():
+    # Instantiate and use the CombinedDataset
+    combined_dataset = MixedDatasetClass()
+    combined_dataset.load_data()
+
+    # Access combined data and subject list
+    print("Combined Data:")
+    print(combined_dataset.input_data)
+
+    print("Combined Subjects:")
+    print(combined_dataset.subject_list)
+
+    # Initialize the FOVAL trainer
+    foval_trainer = FOVALTrainer(config_path="models/config/foval.json", dataset=combined_dataset, device=device,
+                                 feature_names=input_features, save_intermediates_every_epoch=False)
+    foval_trainer.setup()
+
+    mean_mae = foval_trainer.cross_validate(num_epochs=n_epochs)
+    print(f"Model Average Mean Absolute Error: {mean_mae}")
+
+
 if __name__ == "__main__":
-    main()
+    seed_everything(seed=42)
+    device = setup_device()
+    n_epochs = 500
+    # main()
+    main_total_dataset()
+    # main_mix_datasets()
+    # rv u giw
+    # rv u tufts
+    # giw u tufts
+    # giw u rv
+    # tufts u rv
+    # tufts u giw
+
 
 '''
 CVPR Evaluation

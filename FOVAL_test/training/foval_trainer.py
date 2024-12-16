@@ -75,7 +75,7 @@ class FOVALTrainer:
         with open(config_path, 'r') as f:
             hyper_parameters = json.load(f)
         self.hyperparameters = hyper_parameters
-        self.batch_size = 12  # hyper_parameters['batch_size']
+        self.batch_size =  12 # hyper_parameters['batch_size']
         self.learning_rate = hyper_parameters['learning_rate']
         self.weight_decay = hyper_parameters['weight_decay']
         self.fc1_dim = hyper_parameters['fc1_dim']
@@ -183,10 +183,6 @@ class FOVALTrainer:
         ) as profiler:
             for epoch in range(num_epochs):
                 self.train_epoch(epoch)
-                if keyboard.is_pressed('q'):
-                    goToNextOptimStep = True
-                    isBreakLoop = True
-                    break  # Exit the outer loop to stop training completely for current subject
 
                 if self.valid_loader:
                     is_last_epoch = (epoch == num_epochs - 1)
@@ -265,6 +261,9 @@ class FOVALTrainer:
 
         with torch.no_grad():
             for X_batch, y_batch in self.valid_loader:
+
+                if keyboard.is_pressed('q'):
+                    break
                 X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
                 y_pred, intermediates = self.model(X_batch, return_intermediates=True)
 
@@ -322,6 +321,7 @@ class FOVALTrainer:
         if self.current_metrics[
             "val_mae"] < self.early_stopping_threshold or self.patience_counter > self.patience_limit:
             isBreakLoop = True
+
 
         return isBreakLoop
         #
