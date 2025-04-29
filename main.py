@@ -423,7 +423,7 @@ def a_single_sets(model_type):
     # Load and prepare dataset
     # RobustVision Data
     # Results: 9.1 avg MAE with bs=460, ca. 20 avg MAE bs=12
-    dataset = RobustVisionDataset(data_dir="data/input/robustvision/")
+    dataset = RobustVisionDataset(data_dir="data/input/robustvision/", sequence_length=10)
 
     # GIW
     # dataset = GIWDataset(data_dir="data/input/gaze_in_wild/", trial_name="T4_tea_making")
@@ -433,6 +433,14 @@ def a_single_sets(model_type):
     # dataset = TuftsDataset(data_dir="data/input/tufts/", test_split_size=10)       #  10.00 avg MAE with bs=12
 
     dataset.load_data()
+    dataset.preprocess_all_subjects_once(output_dir="cached_subjects")
+
+    # ⬇️ NEU: Nur wenn noch nicht gecached
+    if not os.path.exists("cached_subjects") or len(os.listdir("cached_subjects")) == 0:
+        print("Preprocessing all subjects (once)...")
+        dataset.preprocess_all_subjects_once(output_dir="cached_subjects")
+
+
 
     # Initialize the FOVAL trainer
     foval_trainer = FOVALTrainer(config_path="models/config/foval.json", dataset=dataset, device=device,

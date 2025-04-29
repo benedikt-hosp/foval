@@ -27,41 +27,29 @@ def create_optimizer(learning_rate, weight_decay, model=None):
 
 
 def create_lstm_tensors_dataset(X, y):
-    # assert X is not None and len(X) > 0, "X is empty or None"
-    # assert y is not None and len(y) > 0, "y is empty or None"
-    #
-    # # Convert training features directly to a tensor
-    # features_tensor = torch.tensor([sequence.values for sequence in X], dtype=torch.float32)
-    #
-    # # Convert training targets directly to a tensor
-    # targets_tensor = torch.tensor(y, dtype=torch.float32).unsqueeze(-1)
-    #
-    # print(
-    #     f"Training dataset has {features_tensor.shape[0]} samples with sequence shape {features_tensor.shape[1:]} and {len(y)} labels")
-    #
-    # return features_tensor, targets_tensor
+    """
+    Converts sequences of features and targets into PyTorch tensors.
+    Supports both list of DataFrames and NumPy arrays as input.
+    """
+    if isinstance(X, list):
+        # Legacy mode: X is a list of DataFrames
+        features = np.array([sequence.values for sequence in X])
+    elif isinstance(X, np.ndarray):
+        # Preferred mode: X is already a numpy array of shape [samples, timesteps, features]
+        features = X
+    else:
+        raise TypeError(f"Unsupported type for X: {type(X)}")
 
-    # Check for None or empty inputs
-    assert X is not None and len(X) > 0, "X is empty or None"
-    assert y is not None and len(y) > 0, "y is empty or None"
-
-    # Convert training features
-    features = np.array([sequence.values for sequence in X])
-    print(f"features shape: {features.shape}")
+    targets = y
     features_tensor = torch.tensor(features, dtype=torch.float32)
-
-    # Convert training targets
-    targets_tensor = torch.tensor(y, dtype=torch.float32).unsqueeze(-1)
-
-    print(
-        f"Dataset has {features_tensor.shape[0]} samples with sequence shape {features_tensor.shape[1:]} and {len(y)} labels")
-
+    targets_tensor = torch.tensor(targets, dtype=torch.float32).unsqueeze(-1)
     return features_tensor, targets_tensor
 
 
-def create_dataloaders_dataset(features_tensor, targets_tensor, batch_size):
+
+def create_dataloaders_dataset(features_tensor, targets_tensor, batch_size, shuffle=False):
     train_dataset = TensorDataset(features_tensor, targets_tensor)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle,
                               drop_last=False, pin_memory=True, num_workers=14, prefetch_factor=4, persistent_workers=True)
     return train_loader
 

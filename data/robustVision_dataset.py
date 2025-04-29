@@ -12,23 +12,27 @@ from sklearn.preprocessing import (
 )
 import warnings
 
+from tqdm import tqdm
+
 from data.AbstractDatasetClass import AbstractDatasetClass
 from data.foval_preprocessor import remove_outliers_in_labels, binData, createFeatures, \
     detect_and_remove_outliers_in_features_iqr, clean_data, global_normalization, subject_wise_normalization, \
     separate_features_and_targets
 from data.utilities import create_lstm_tensors_dataset, create_dataloaders_dataset
-
+from data.utilities import create_lstm_tensors_dataset, \
+    create_dataloaders_dataset
 warnings.filterwarnings("ignore")
 pd.set_option('display.max_columns', None)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class RobustVisionDataset(AbstractDatasetClass):
-    def __init__(self, data_dir):
+    def __init__(self, data_dir, sequence_length):
         """
         Initialize the RobustVisionDataset class.
 
         """
+        super().__init__(data_dir, sequence_length)
         self.dataset_name = "robustvision"
         self.input_data = None
         self.subject_list = None
@@ -313,73 +317,136 @@ class RobustVisionDataset(AbstractDatasetClass):
     def get_data(self):
         return self.input_data
 
-    def get_data_loader(self, train_index, val_index=None, test_index=None, batch_size=460):
+    def get_data_loader(self, train_index, val_index=None, test_index=None, batch_size=460, feature_transformer=None):
         """
         Create and return data loaders for training, validation, and testing datasets.
-
-        :param train_index: Indices for training subjects.
-        :param val_index: Indices for validation subjects (optional).
-        :param test_index: Indices for test subjects (optional).
-        :param batch_size: Batch size for the data loaders.
-        :return: Data loaders for training, validation, and testing datasets, and the input size.
         """
-        train_loader = self.prepare_loader(train_index, batch_size, is_train=True)
-        val_loader = self.prepare_loader(val_index, batch_size, is_train=False) if val_index is not None else None
-        # test_loader = self.prepare_loader(test_index, batch_size, is_train=False) if test_index is not None else None
+        train_loader = self.prepare_loader(train_index, batch_size=batch_size, is_train=True,
+                                           feature_transformer=feature_transformer)
 
-        input_size = train_loader.dataset[0][0].shape[1]  # Assuming the first dimension is batch_size
+        val_loader = None
+        if val_index is not None:
+            val_loader = self.prepare_loader(val_index, batch_size=batch_size, is_train=False,
+                                             feature_transformer=feature_transformer)
 
+        test_loader = None
+        if test_index is not None:
+            test_loader = self.prepare_loader(test_index, batch_size=batch_size, is_train=False,
+                                              feature_transformer=feature_transformer)
+
+        input_size = train_loader.dataset[0][0].shape[1]  # [batch, time, features]
         return train_loader, val_loader, input_size
 
-    def prepare_loader(self, subject_index, batch_size, is_train=False):
-        print(f"Preparing data loader... validation {subject_index}.is_train {is_train is not True}")
+    def prepare_loader(self, subject_index, batch_size=460, is_train=False, feature_transformer=None):
+        """
+        Load preprocessed subject data (.pkl), apply scaling, transformation, sequence creation.
+        """
+
+
+        print(f"Preparing data loader... is_train={is_train}")
         subjects = subject_index if isinstance(subject_index, list) else [subject_index]
-        print(f"Preparing data for subjects: {subjects}")
+        print(f"Subjects to prepare: {subjects}")
 
+        all_features = []
+        all_targets = []
 
-        data = self.input_data[self.input_data['SubjectID'].isin(subjects)]
-        # if is_train:
-        #     data.to_csv('checkpoint_raw_1.csv')
+        for subject_id in subjects:
+            pkl_path = os.path.join("cached_subjects", f"{subject_id}.pkl")
+            if not os.path.exists(pkl_path):
+                raise FileNotFoundError(f"❌ Cached file for subject {subject_id} not found at {pkl_path}")
 
-        # Check if the data is empty before proceeding
-        if data.empty:
-            raise ValueError(f"No data found for subjects: {subjects}")
+            data = pd.read_pickle(pkl_path)
 
-        # Feature creation and normalization
-        data = self.create_features(data)
-        # if is_train:
-        #     data.to_csv('checkpoint_features_2.csv')
-        data = self.normalize_data(data)
+            if data.empty:
+                print(f"⚠️ Skipping empty subject {subject_id}")
+                continue
 
-        # Apply transformations if necessary
-        if is_train:
-            #     data.to_csv('checkpoint_normalized_3.csv')
+            # Transformationen und Skalierung
+            if is_train:
+                data = self.calculate_transformations_for_features(data)
+            else:
+                data = self.apply_transformations_on_features(data)
 
-            data = self.calculate_transformations_for_features(data)
-            # data.to_csv('checkpoint_transformed_4.csv')
+            # data = self.scale_features(data, isTrain=is_train)
+            data = self.scale_target(data, isTrain=is_train)
 
-        else:
-            data = self.apply_transformations_on_features(data)
+            # Sequenzen erzeugen
+            sequences = self.create_sequences(data)
+            features, targets = separate_features_and_targets(sequences)
 
-        # Scale features and target (transform only using the fitted scaler)
-        data = self.scale_features(data, isTrain=is_train)
-        data = self.scale_target(data, isTrain=is_train)
-        # if is_train:
-        #     data.to_csv('checkpoint_scaled_5.csv')
+            all_features.append(features)
+            all_targets.append(targets)
 
-        # Generate sequences
-        sequences = self.create_sequences(data)
-        features, targets = separate_features_and_targets(sequences)
+        # Alle Subjekte zusammenfassen
+        X = np.concatenate(all_features, axis=0)
+        y = np.concatenate(all_targets, axis=0)
 
-        # Convert to tensors and create data loader
-        features_tensor, targets_tensor = create_lstm_tensors_dataset(features, targets)
-        data_loader = create_dataloaders_dataset(features_tensor, targets_tensor, batch_size=batch_size)
+        # In Tensor-Loader umwandeln
+        X_tensor, y_tensor = create_lstm_tensors_dataset(X, y)
+        loader = create_dataloaders_dataset(X_tensor, y_tensor, batch_size=batch_size, shuffle=is_train)
 
-        # if is_train:
-        #     # Assuming your list is called sequences
-        #     with open('train_sequences_new.pkl', 'wb') as f:
-        #         pickle.dump(sequences, f)
+        return loader
 
-        # sequences.to_pickle("train_sequences_new.pkl")
+    def prepare_loader_with_fit(self, train_subjects, val_subjects, batch_size=460):
+        # 1. Lade train pickle, fit transformer, apply transform, make sequences
+        train_X, train_y = self._load_and_process_subjects(train_subjects, is_train=True)
 
-        return data_loader
+        # 2. Lade val pickle, apply transformer, make sequences
+        val_X, val_y = self._load_and_process_subjects(val_subjects, is_train=False)
+
+        # 3. Erstelle DataLoader
+        train_loader = create_dataloaders_dataset(*create_lstm_tensors_dataset(train_X, train_y), batch_size=batch_size,
+                                                  shuffle=True)
+        val_loader = create_dataloaders_dataset(*create_lstm_tensors_dataset(val_X, val_y), batch_size=batch_size,
+                                                shuffle=False)
+
+        input_size = train_X.shape[-1]
+        return train_loader, val_loader, input_size
+
+    def _load_and_process_subjects(self, subjects, is_train):
+        all_features, all_targets = [], []
+        for subject in subjects:
+            data = pd.read_pickle(f"cached_subjects/{subject}.pkl")
+            if is_train:
+                data = self.calculate_transformations_for_features(data)
+                data = self.scale_target(data, isTrain=True)
+            else:
+                data = self.apply_transformations_on_features(data)
+                data = self.scale_target(data, isTrain=False)
+
+            sequences = self.create_sequences(data)
+            X, y = separate_features_and_targets(sequences)
+            all_features.append(X)
+            all_targets.append(y)
+
+        return np.concatenate(all_features), np.concatenate(all_targets)
+
+    def preprocess_all_subjects_once(self, output_dir="cached_subjects_raw"):
+        """
+        Preprocess all subjects once (only feature creation and normalization),
+        and save raw sequences as .npz files (no scaling or transformations).
+        """
+        os.makedirs(output_dir, exist_ok=True)
+
+        print(f"📦 Preprocessing and caching subjects to: {output_dir}")
+
+        for subject_id in tqdm(self.subject_list):
+            try:
+                print(f"→ Preprocessing Subject: {subject_id}")
+                data = self.input_data[self.input_data['SubjectID'] == subject_id].copy()
+
+                if data.empty:
+                    print(f"⚠️  Skipping {subject_id} (no data)")
+                    continue
+
+                # Nur subjektbasierte Schritte
+                data = self.create_features(data)
+                data = self.normalize_data(data)
+
+                # Noch keine Transformationen, keine Skalierung, keine Sequenzen
+                # Aber trotzdem speichern: als DataFrame im Pickle-Format
+                save_path = os.path.join(output_dir, f"{subject_id}.pkl")
+                data.to_pickle(save_path)
+
+            except Exception as e:
+                print(f"❌ Error processing subject {subject_id}: {e}")

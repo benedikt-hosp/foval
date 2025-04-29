@@ -11,6 +11,9 @@ from sklearn.metrics import r2_score, mean_squared_error
 from sklearn.model_selection import KFold
 import sys
 import os
+
+from training.FeatureTransformerManager import FeatureTransformerManager
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..")
 
 from data.AbstractDatasetClass import AbstractDatasetClass
@@ -28,6 +31,7 @@ class FOVALTrainer:
         """
         Initialize the FOVALTrainer with feature count, dataset object, and model save path.
         """
+        self.feature_transformer = None
         self.per_fold_results = []
         self.scaler = GradScaler()  # Initialize GradScaler for mixed precision
 
@@ -199,6 +203,7 @@ class FOVALTrainer:
 
         # Durchlaufe nur die Splits ab `start_fold`
         for fold_idx in range(start_fold, len(all_splits)):
+
             train_idx, val_idx = all_splits[fold_idx]
             print(f"\n\nStarting Fold {fold_idx + 1}/{self.n_splits}")
 
@@ -243,6 +248,7 @@ class FOVALTrainer:
             writer.writerows(self.per_fold_results)
 
     def run_fold(self, train_index, val_index=None, test_index=None, num_epochs=10):
+        self.feature_transformer = FeatureTransformerManager()
 
         enable_profiling = False  # True, wenn du Diagnostik willst
         # Ensure that val_index is not None and has elements
@@ -262,9 +268,13 @@ class FOVALTrainer:
         print("Save path is set to: ", self.save_path)
 
         print(f"Train index: {train_index} and val index {validation_participant_name}, and test index {test_index}, and batch size {self.batch_size}")
-        # Prepare data loaders
-        self.train_loader, self.valid_loader, input_size = self.dataset.get_data_loader(
-            train_index, validation_participant_name, self.batch_size)
+
+
+        # self.train_loader, self.valid_loader, input_size = self.dataset.get_data_loader(
+        #     train_index, val_index, None, self.batch_size, feature_transformer=self.feature_transformer
+        # )
+        self.train_loader, self.valid_loader, input_size = self.dataset.prepare_loader_with_fit(
+            train_index, val_index, batch_size=self.batch_size)
 
         self.target_scaler = self.dataset.target_scaler
         self.optimizer, self.scheduler = create_optimizer(

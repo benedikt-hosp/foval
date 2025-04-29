@@ -139,3 +139,6 @@ class AbstractDatasetClass(ABC):
 
     def get_data(self):
         return self.input_data
+
+    def prepare_loader_with_fit(self, train_subjects, val_subjects, batch_size):
+        pass
