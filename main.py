@@ -423,10 +423,10 @@ def a_single_sets(model_type):
     # Load and prepare dataset
     # RobustVision Data
     # Results: 9.1 avg MAE with bs=460, ca. 20 avg MAE bs=12
-    # dataset = RobustVisionDataset(data_dir="data/input/robustvision/")
+    dataset = RobustVisionDataset(data_dir="data/input/robustvision/")
 
     # GIW
-    dataset = GIWDataset(data_dir="data/input/gaze_in_wild/", trial_name="T4_tea_making")
+    # dataset = GIWDataset(data_dir="data/input/gaze_in_wild/", trial_name="T4_tea_making")
     # Results: 9.25 cm avg MAE with bs=460
 
     # TUFTS Data
@@ -634,7 +634,7 @@ if __name__ == "__main__":
     seed_everything(seed=42)
     device = setup_device()
     n_epochs = 500
-    for model_type in [ "Attention", "TCN", "GRU",  "CNN", "LSTM"]:
+    for model_type in ["LSTM", "Attention", "TCN", "GRU",  "CNN", ]:
         print("Model type: ", model_type)
         a_single_sets(model_type)       # done
 

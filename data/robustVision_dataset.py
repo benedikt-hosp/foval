@@ -128,6 +128,7 @@ class RobustVisionDataset(AbstractDatasetClass):
 
         return self.input_data
 
+
     # 2.
     def create_features(self, data_in):
         """
@@ -335,7 +336,6 @@ class RobustVisionDataset(AbstractDatasetClass):
         subjects = subject_index if isinstance(subject_index, list) else [subject_index]
         print(f"Preparing data for subjects: {subjects}")
 
-        
 
         data = self.input_data[self.input_data['SubjectID'].isin(subjects)]
         # if is_train:

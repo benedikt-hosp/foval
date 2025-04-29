@@ -20,7 +20,7 @@ from data.robustVision_dataset import RobustVisionDataset
 from data.utilities import create_optimizer, analyzeResiduals
 from models.foval import Foval
 from torch.cuda.amp import autocast, GradScaler
-
+from evaluations.plot_logs import plot_mae_curves
 
 class FOVALTrainer:
     def __init__(self, config_path, dataset: AbstractDatasetClass, device, feature_names,
@@ -29,6 +29,8 @@ class FOVALTrainer:
         Initialize the FOVALTrainer with feature count, dataset object, and model save path.
         """
         self.per_fold_results = []
+        self.scaler = GradScaler()  # Initialize GradScaler for mixed precision
+
         self.current_fold = None
         self.model_type = model_type
         self.hidden_layer_size = None
@@ -87,7 +89,7 @@ class FOVALTrainer:
         with open(config_path, 'r') as f:
             hyper_parameters = json.load(f)
         self.hyperparameters = hyper_parameters
-        self.batch_size =  hyper_parameters['batch_size']
+        self.batch_size =  1024 # hyper_parameters['batch_size']
         self.learning_rate = hyper_parameters['learning_rate']
         self.weight_decay = hyper_parameters['weight_decay']
         self.fc1_dim = hyper_parameters['fc1_dim']
@@ -138,6 +140,11 @@ class FOVALTrainer:
         val_subjects = self.dataset.val_data['SubjectID'].unique()
 
         fold_accuracies = []
+
+        try:
+            self.model = torch.compile(self.model)  # Nur PyTorch ≥ 2.0
+        except:
+            pass
 
         print("Starting cross-validation with separate datasets.")
 
@@ -236,6 +243,8 @@ class FOVALTrainer:
             writer.writerows(self.per_fold_results)
 
     def run_fold(self, train_index, val_index=None, test_index=None, num_epochs=10):
+
+        enable_profiling = False  # True, wenn du Diagnostik willst
         # Ensure that val_index is not None and has elements
         if val_index is not None and len(val_index) > 0:
             validation_participant_name = val_index[0]
@@ -262,13 +271,27 @@ class FOVALTrainer:
             model=self.model, learning_rate=self.learning_rate,
             weight_decay=self.weight_decay)
 
-        with torch.profiler.profile(
-                schedule=torch.profiler.schedule(wait=1, warmup=1, active=3),
-                on_trace_ready=torch.profiler.tensorboard_trace_handler('./log'),
-                record_shapes=True,
-                profile_memory=True,
-                with_stack=True
-        ) as profiler:
+        if enable_profiling:
+            with torch.profiler.profile(
+                    schedule=torch.profiler.schedule(wait=1, warmup=1, active=3),
+                    on_trace_ready=torch.profiler.tensorboard_trace_handler('./log'),
+                    record_shapes=True,
+                    profile_memory=True,
+                    with_stack=True
+            ) as profiler:
+                for epoch in range(num_epochs):
+                    self.train_epoch(epoch)
+
+                    if self.valid_loader:
+                        is_last_epoch = (epoch == num_epochs - 1)
+                        self.validate_epoch(epoch, val_subject=validation_participant_name, is_last_epoch=is_last_epoch)
+
+                    self.scheduler.step()
+
+                    if self.check_early_stopping(epoch):
+                        break
+                profiler.step()  # Step profiler at the end of each epoch
+        else:
             for epoch in range(num_epochs):
                 self.train_epoch(epoch)
 
@@ -278,9 +301,9 @@ class FOVALTrainer:
 
                 self.scheduler.step()
 
-                if self.check_early_stopping(epoch):
+                if epoch == num_epochs - 1 or self.check_early_stopping(epoch):
+                    plot_mae_curves()
                     break
-            profiler.step()  # Step profiler at the end of each epoch
 
         # Save model state dictionary after training
         self.save_model_state(epoch)
@@ -294,94 +317,78 @@ class FOVALTrainer:
         return self.best_metrics["mae"]
 
     def train_epoch(self, epoch):
-        """
-        Train the model for one epoch.
-        """
-        scaler = GradScaler()  # Initialize GradScaler for mixed precision
-
-        mse_loss_fn = nn.MSELoss(reduction='sum').to(self.device)
-        mae_loss_fn = nn.L1Loss().to(self.device)
-        smae_loss_fn = nn.SmoothL1Loss(beta=0.75).to(self.device)
-
         self.model.train()
-        total_samples = 0.0
-        total_mae, total_mse, total_smae = 0, 0, 0
+
+        mse_loss_fn = nn.MSELoss(reduction='mean')  # Einheitlich 'mean'
+        mae_loss_fn = nn.L1Loss(reduction='mean')
+        smae_loss_fn = nn.SmoothL1Loss(beta=0.75, reduction='mean')
+
+        total_mae, total_mse, total_smae = 0.0, 0.0, 0.0
+        total_batches = 0
 
         for X_batch, y_batch in self.train_loader:
             X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
             self.optimizer.zero_grad()
 
-            # Example forward pass with mixed precision
             with autocast():
                 y_pred, _ = self.model(X_batch, return_intermediates=True)
                 smae_loss = smae_loss_fn(y_pred, y_batch)
-            # Scaled backward pass
-            scaler.scale(smae_loss).backward()
-            scaler.step(self.optimizer)
-            scaler.update()
 
-            # smae_loss.backward()
-            # self.optimizer.step()
+            self.scaler.scale(smae_loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
 
-            # Inverse transform for metric calculation (post-backpropagation)
-            y_pred_inv = self.inverse_transform_target(y_pred)
-            y_batch_inv = self.inverse_transform_target(y_batch)
+            y_pred = self.inverse_transform_target(y_pred.detach()).float()
+            y_batch = self.inverse_transform_target(y_batch.detach()).float()
 
-            # Accumulate metrics on the original scale
-            total_mae += mae_loss_fn(y_pred_inv, y_batch_inv).item() * y_batch.size(0)
-            total_mse += mse_loss_fn(y_pred_inv, y_batch_inv).item() * y_batch.size(0)
-            total_smae += smae_loss_fn(y_pred_inv, y_batch_inv).item() * y_batch.size(0)
-            total_samples += y_batch.size(0)
+            total_mae += mae_loss_fn(y_pred, y_batch).item()
+            total_mse += mse_loss_fn(y_pred, y_batch).item()
+            total_smae += smae_loss_fn(y_pred, y_batch).item()
+            total_batches += 1
 
-        self.current_metrics["train_mae"] = total_mae / total_samples
-        self.current_metrics["train_mse"] = total_mse / total_samples
-        self.current_metrics["train_smae"] = total_smae / total_samples
+        self.current_metrics["train_mae"] = total_mae / total_batches
+        self.current_metrics["train_mse"] = total_mse / total_batches
+        self.current_metrics["train_smae"] = total_smae / total_batches
 
     def validate_epoch(self, epoch, val_subject, is_last_epoch=False):
-        mse_loss_fn = nn.MSELoss(reduction='sum').to(self.device)
-        mae_loss_fn = nn.L1Loss().to(self.device)
-        smae_loss_fn = nn.SmoothL1Loss().to(self.device)
-
         self.model.eval()
-        total_val_mae, total_val_mse, total_val_smae = 0, 0, 0
-        total_val_samples = 0.0
+
+        mae_loss_fn = nn.L1Loss(reduction='mean')
+        mse_loss_fn = nn.MSELoss(reduction='mean')
+        smae_loss_fn = nn.SmoothL1Loss(reduction='mean')
+
+        total_mae, total_mse, total_smae = 0.0, 0.0, 0.0
+        total_batches = 0
         all_predictions, all_true_values = [], []
 
         with torch.no_grad():
             for X_batch, y_batch in self.valid_loader:
-
-                # if keyboard.is_pressed('q'):
-                #    break
                 X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
-                y_pred, intermediates = self.model(X_batch, return_intermediates=True)
+                with autocast():
+                    y_pred, intermediates = self.model(X_batch, return_intermediates=True)
 
-                y_pred = self.inverse_transform_target(y_pred)
-                y_batch = self.inverse_transform_target(y_batch)
+                y_pred = self.inverse_transform_target(y_pred).float()
+                y_batch = self.inverse_transform_target(y_batch).float()
 
-                total_val_mae += mae_loss_fn(y_pred, y_batch).item() * y_batch.size(0)
-                total_val_mse += mse_loss_fn(y_pred, y_batch).item() * y_batch.size(0)
-                total_val_smae += smae_loss_fn(y_pred, y_batch).item() * y_batch.size(0)
-                total_val_samples += y_batch.size(0)
+                total_mae += mae_loss_fn(y_pred, y_batch).item()
+                total_mse += mse_loss_fn(y_pred, y_batch).item()
+                total_smae += smae_loss_fn(y_pred, y_batch).item()
+                total_batches += 1
 
                 all_predictions.append(y_pred.cpu().numpy())
                 all_true_values.append(y_batch.cpu().numpy())
 
-        # Store metrics for this epoch
-        self.current_metrics["val_mae"] = total_val_mae / total_val_samples
-        self.current_metrics["val_mse"] = total_val_mse / total_val_samples
-        self.current_metrics["val_smae"] = total_val_smae / total_val_samples
-        true_vals = np.concatenate(all_true_values)
-        pred_vals = np.concatenate(all_predictions)
-        mask = ~np.isnan(true_vals) & ~np.isnan(pred_vals)
-        self.current_metrics["val_r2"] = r2_score(true_vals[mask], pred_vals[mask])
+        self.current_metrics["val_mae"] = total_mae / total_batches
+        self.current_metrics["val_mse"] = total_mse / total_batches
+        self.current_metrics["val_smae"] = total_smae / total_batches
 
-        # rmse = np.sqrt(mean_squared_error(true_vals[mask], pred_vals[mask]))
+        y_true = np.concatenate(all_true_values)
+        y_pred = np.concatenate(all_predictions)
+        mask = ~np.isnan(y_true) & ~np.isnan(y_pred)
+        self.current_metrics["val_r2"] = r2_score(y_true[mask], y_pred[mask])
 
-
-        print("Saving fold results of ", val_subject)
-        self.log_epoch_metrics(epoch, val_subject, int(total_val_samples))
-
-        # Save activations and weights based on the condition
+        self.log_epoch_metrics(epoch, val_subject, len(y_true))
+        # Optional: save intermediates
         # if self.save_intermediates_every_epoch or is_last_epoch:
         #     self.save_activations_and_weights(intermediates, "intermediates", self.save_path)
 
@@ -449,10 +456,17 @@ class FOVALTrainer:
         isBreakLoop = False
 
         # Check if the current SMAE is better than the best one
-        if self.current_metrics["val_mae"] < self.best_metrics["mae"]:
-            # Update best SMAE and save model
-            self.best_metrics["smae"] = self.current_metrics["val_smae"]
-            self.best_metrics["mae"] = self.current_metrics["val_mae"]
+        # if self.current_metrics["val_mae"] < self.best_metrics["mae"]:
+        #     # Update best SMAE and save model
+        #     self.best_metrics["smae"] = self.current_metrics["val_smae"]
+        #     self.best_metrics["mae"] = self.current_metrics["val_mae"]
+
+        if self.best_metrics is None or self.current_metrics["val_mae"] < self.best_metrics["mae"]:
+            self.best_metrics = {
+                "mae": self.current_metrics["val_mae"],
+                "smae": self.current_metrics["val_smae"],
+                "epoch": epoch
+            }
 
             # torch.save(self.model.state_dict(), os.path.join(self.save_path, 'best_model_state_dict.pth'))
             print(
