@@ -423,10 +423,10 @@ def a_single_sets(model_type):
     # Load and prepare dataset
     # RobustVision Data
     # Results: 9.1 avg MAE with bs=460, ca. 20 avg MAE bs=12
-    # dataset = RobustVisionDataset(data_dir="data/input/robustvision/")
+    dataset = RobustVisionDataset(data_dir="data/input/robustvision/")
 
     # GIW
-    dataset = GIWDataset(data_dir="data/input/gaze_in_wild/", trial_name="T4_tea_making")
+    # dataset = GIWDataset(data_dir="data/input/gaze_in_wild/", trial_name="T4_tea_making")
     # Results: 9.25 cm avg MAE with bs=460
 
     # TUFTS Data
@@ -442,7 +442,6 @@ def a_single_sets(model_type):
     mean_mae = foval_trainer.cross_validate(num_epochs=n_epochs)
 
     print(f"Model Average Mean Absolute Error: {mean_mae}")
-
 
 def analyze_target_distribution(dataframes, target_column='Gt_Depth'):
     """
@@ -498,7 +497,6 @@ def b_loocv_all():
     mean_mae = foval_trainer.cross_validate(num_epochs=n_epochs, start_fold=15)
 
     print(f"Model Average Mean Absolute Error: {mean_mae}")
-
 
 def final_superset_check(combined_dataset):
      # Handle NaN and infinite values
@@ -630,7 +628,6 @@ def d_pretraining():
 
 if __name__ == "__main__":
 
-   
     seed_everything(seed=42)
     device = setup_device()
     n_epochs = 500
