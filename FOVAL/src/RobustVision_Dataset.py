@@ -9,20 +9,41 @@ import warnings
 from FOVAL_Preprocessor import detect_and_remove_outliers, binData, createFeatures, \
     detect_and_remove_outliers_in_features_iqr, selected_features
 
+import os
+
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+data_dir = os.path.join(base_dir, "data", "Subject_25")
+
 warnings.filterwarnings("ignore")
 pd.set_option('display.max_columns', None)
 pd.option_context('mode.use_inf_as_na', True)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+import torch
 
+# Standard Device Auswahl
+if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+    device = torch.device("mps")
+    print("Using MPS device")
+
+elif torch.cuda.is_available():
+    device = torch.device("cuda:0")
+    print(f"Using CUDA device: {torch.cuda.get_device_name(0)}")
+
+else:
+    device = torch.device("cpu")
+    print("Using CPU")
+
+# Danach alle Tensoren / Modelle auf device verschieben:
+# x = x.to(device)
+# model = model.to(device)
 
 def base_cleaning(df):
     df = df.dropna(how='all')
     df = df.replace([np.inf, -np.inf], np.nan)
     df = df.dropna().copy()
 
-    df2 = df[df['GT depth'] > 0.35]
-    df2 = df2[df2['GT depth'] <= 3]
-    df2["GT depth"] = df2["GT depth"].multiply(100)
+    df2 = df[df['GT_depth'] > 0.35]
+    df2 = df2[df2['GT_depth'] <= 3]
+    df2["GT_depth"] = df2["GT_depth"].multiply(100)
     df2 = df2.reset_index(drop=True)
 
     # Detect outliers
@@ -38,8 +59,8 @@ def create_sequences(df, sequence_length=10):
     grouped_data = df.groupby('SubjectID')
     for subj_id, group in grouped_data:
         for i in range(len(group) - sequence_length):
-            seq_features = group.iloc[i:i + sequence_length].drop(columns=['GT depth', 'SubjectID'])
-            seq_target = group.iloc[i + sequence_length]['GT depth']
+            seq_features = group.iloc[i:i + sequence_length].drop(columns=['GT_depth', 'SubjectID'])
+            seq_target = group.iloc[i + sequence_length]['GT_depth']
             sequences.append((seq_features, seq_target, subj_id))
     return sequences
 
@@ -87,7 +108,7 @@ class RobustVision_Dataset:
         print("\tTraining and evaluating regression model\n\n")
         print("=============================================================================")
 
-        data_dir = "../data/Subject_25"
+        # data_dir = "../data/Subject_25"
 
         subject_ids = []
         all_data = []
@@ -103,7 +124,7 @@ class RobustVision_Dataset:
                 if os.path.exists(depthCalib_path):
                     df_depthEval = pd.read_csv(depthCalib_path, delimiter="\t")
                     # Extract and typecast specific columns
-                    starting_columns = ['GT depth', 'World Gaze Direction R X', 'World Gaze Direction R Y',
+                    starting_columns = ['GT_depth', 'World Gaze Direction R X', 'World Gaze Direction R Y',
                                         'World Gaze Direction R Z', 'World Gaze Direction L X',
                                         'World Gaze Direction L Y', 'World Gaze Direction L Z',
                                         'World Gaze Origin R X', 'World Gaze Origin R Z',
@@ -208,19 +229,19 @@ class RobustVision_Dataset:
             self.target_scaler = MinMaxScaler(feature_range=(0, 1000))
 
             # Extract GT depth before scaling and reshape for scaler compatibility
-            gt_depth = data_in['GT depth'].values.reshape(-1, 1)
+            gt_depth = data_in['GT_depth'].values.reshape(-1, 1)
             # If a feature scaler is set, fit and transform the training data, and transform the validation data
             if self.target_scaler is not None:
                 gt_depth = self.target_scaler.fit_transform(gt_depth)
                 # Re-attach the excluded columns
-            data_in['GT depth'] = gt_depth.ravel()
+            data_in['GT_depth'] = gt_depth.ravel()
         else:
 
-            gt_depth = data_in['GT depth'].values.reshape(-1, 1)
+            gt_depth = data_in['GT_depth'].values.reshape(-1, 1)
             # If a feature scaler is set, fit and transform the training data, and transform the validation data
             if self.target_scaler is not None:
                 gt_depth = self.target_scaler.transform(gt_depth)
                 # Re-attach the excluded columns
-            data_in['GT depth'] = gt_depth.ravel()
+            data_in['GT_depth'] = gt_depth.ravel()
 
         return data_in

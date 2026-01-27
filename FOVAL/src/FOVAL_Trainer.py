@@ -23,10 +23,25 @@ from Utilities import create_lstm_tensors_dataset, create_dataloaders_dataset, d
 pd.set_option('display.max_columns', None)
 pd.option_context('mode.use_inf_as_na', True)
 
-print(torch.cuda.device_count())
-print(torch.cuda.get_device_name(0))  # Use this to print the name of the first device
-device = torch.device("cuda:0")  # Replace 0 with the device number for your other GPU
-n_epochs = 500
+import torch
+
+# Standard Device Auswahl
+if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+    device = torch.device("mps")
+    print("Using MPS device")
+
+elif torch.cuda.is_available():
+    device = torch.device("cuda:0")
+    print(f"Using CUDA device: {torch.cuda.get_device_name(0)}")
+
+else:
+    device = torch.device("cpu")
+    print("Using CPU")
+
+# Danach alle Tensoren / Modelle auf device verschieben:
+# x = x.to(device)
+# model = model.to(device)
+n_epochs = 2000
 
 
 def save_activations_validation(intermediates, target_vector, name, save_dir):
@@ -351,7 +366,7 @@ class FOVAL_Trainer:
 
     def inverse_transform_target(self, y_transformed):
         # Move the tensor to CPU if it's on GPU
-        if y_transformed.is_cuda:
+        if y_transformed.is_cuda or y_transformed.is_mps:
             y_transformed = y_transformed.cpu()
 
         # Now that the tensor is on the CPU, convert it to a NumPy array
@@ -416,10 +431,10 @@ class FOVAL_Trainer:
                 smae_loss_fn,
                 epoch)
 
-            if keyboard.is_pressed('q'):
-                goToNextOptimStep = True
-                isBreakLoop = True
-                # break  # Exit the outer loop to stop training completely
+            #if keyboard.is_pressed('q'):
+            #    goToNextOptimStep = True
+            #    isBreakLoop = True
+            # break  # Exit the outer loop to stop training completely
 
             if valid_loader_0 is not None:
                 isBreakLoop, avg_val_mse, avg_val_rmse, avg_val_mae, avg_val_smae, avg_val_r2, patience_counter, residuals, raw_residuals = self.validate_epoch(

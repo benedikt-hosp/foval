@@ -4,17 +4,31 @@ import torch
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import TensorDataset, DataLoader
 from SimpleLSTM import SimpleLSTM_V2
-print(torch.cuda.device_count())
-print(torch.cuda.get_device_name(0))  # Use this to print the name of the first device
-device = torch.device("cuda:0")  # Replace 0 with the device number for your other GPU
+import torch
 
+# Standard Device Auswahl
+if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+    device = torch.device("mps")
+    print("Using MPS device")
+
+elif torch.cuda.is_available():
+    device = torch.device("cuda:0")
+    print(f"Using CUDA device: {torch.cuda.get_device_name(0)}")
+
+else:
+    device = torch.device("cpu")
+    print("Using CPU")
+
+# Danach alle Tensoren / Modelle auf device verschieben:
+# x = x.to(device)
+# model = model.to(device)
 
 def seed_everything(seed=1234):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+    # torch.cuda.manual_seed(seed)
+    # torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 

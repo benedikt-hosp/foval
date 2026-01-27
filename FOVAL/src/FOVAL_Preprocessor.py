@@ -13,7 +13,7 @@ from sklearn.utils import resample
 # original 40
 selected_features = [
     'SubjectID',
-    'GT depth',
+    'GT_depth',
     # INPUT FEATURE
     'World Gaze Direction R X',
     'World Gaze Direction R Y',
@@ -65,7 +65,7 @@ selected_features = [
 # Try 1: no repetition = 29 features
 selected_features_no_rep = [
     'SubjectID',
-    'GT depth',
+    'GT_depth',
     # INPUT FEATURE
     'World Gaze Direction R X',
     'World Gaze Direction R Y',
@@ -151,7 +151,7 @@ selected_features2 = [
 def detect_and_remove_outliers_in_features(df):
 
     # Assuming df is your DataFrame
-    features = df.drop(columns=['GT depth'])
+    features = df.drop(columns=['GT_depth'])
 
     # Apply Standard Scaler
     scaler = RobustScaler()
@@ -186,9 +186,9 @@ def detect_and_remove_outliers_in_features_iqr(df):
 
 
 def detect_and_remove_outliers(df, window_size, threshold):
-    # Check if 'GT depth' column exists
-    if 'GT depth' not in df.columns:
-        raise ValueError("Column 'GT depth' not found in the DataFrame")
+    # Check if 'GT_depth' column exists
+    if 'GT_depth' not in df.columns:
+        raise ValueError("Column 'GT_depth' not found in the DataFrame")
 
     # Iterate over the DataFrame
     outlier_indices = []
@@ -196,18 +196,18 @@ def detect_and_remove_outliers(df, window_size, threshold):
         # Define the window range
         start = max(i - window_size // 2, 0)
         end = min(i + window_size // 2 + 1, len(df))
-        window = df['GT depth'].iloc[start:end]
+        window = df['GT_depth'].iloc[start:end]
 
         # Calculate the median of the window
         mean = np.mean(window)
         # median = np.nanmedian(window)
 
         # # Check if the current value is an outlier
-        if abs(df['GT depth'].iloc[i] - mean) > threshold:
+        if abs(df['GT_depth'].iloc[i] - mean) > threshold:
             outlier_indices.append(i)
 
         # Check if the current value is an outlier
-        # if abs(df['GT depth'].iloc[i] - median) > threshold:
+        # if abs(df['GT_depth'].iloc[i] - median) > threshold:
         #     outlier_indices.append(i)
 
     # Check if the outlier indices are in the DataFrame index
@@ -258,14 +258,14 @@ def getAngle(row):
 
 
 def global_normalization(data):
-    features = data.drop(columns=['SubjectID', 'GT depth'])
+    features = data.drop(columns=['SubjectID', 'GT_depth'])
     # scaler = StandardScaler()  # Global scaler
     scaler = RobustScaler()  # Global scaler
 
     normalized_features = scaler.fit_transform(features)
     data_normalized = pd.DataFrame(normalized_features, columns=features.columns)
     data_normalized['SubjectID'] = data['SubjectID'].values
-    data_normalized['GT depth'] = data['GT depth'].values
+    data_normalized['GT_depth'] = data['GT_depth'].values
     return data_normalized
 
 
@@ -285,11 +285,11 @@ def getEyeVergenceAngle(row):
 def normalize_subject_data(data, scaler):
     # Normalize data for a single subject using the provided scaler
     # Assuming 'SubjectID' is not to be normalized
-    features = data.drop(columns=['SubjectID', 'GT depth'])
+    features = data.drop(columns=['SubjectID', 'GT_depth'])
     normalized_features = scaler.fit_transform(features)
     data_normalized = pd.DataFrame(normalized_features, columns=features.columns)
     data_normalized['SubjectID'] = data['SubjectID'].values
-    data_normalized['GT depth'] = data['GT depth'].values
+    data_normalized['GT_depth'] = data['GT_depth'].values
     return data_normalized
 
 
@@ -494,11 +494,11 @@ def augmentTrainingData(training_set=None):
     training_set = training_set.dropna()
 
     # Separate the columns to be excluded from augmentation
-    y_train = training_set['GT depth']
+    y_train = training_set['GT_depth']
     subject_id = training_set['SubjectID']
 
-    # Drop the columns 'GT depth' and 'SubjectID' from the training set before augmentation
-    X_train = training_set.drop(['GT depth', 'SubjectID'], axis=1)
+    # Drop the columns 'GT_depth' and 'SubjectID' from the training set before augmentation
+    X_train = training_set.drop(['GT_depth', 'SubjectID'], axis=1)
     print("Regression on ", X_train.columns)
     augmentData = True
     if augmentData:
@@ -526,7 +526,7 @@ def augmentTrainingData(training_set=None):
 
     # Convert the combined data back to a DataFrame
     training_set_combined_df = pd.DataFrame(X_train_combined, columns=X_train.columns)
-    training_set_combined_df['GT depth'] = y_train_combined
+    training_set_combined_df['GT_depth'] = y_train_combined
     training_set_combined_df['SubjectID'] = subject_id_combined
     training_set_combined_df.dropna(inplace=True)
 
@@ -538,7 +538,7 @@ def augment_data(df, noise_level=0.1, shift_max=5, scaling_factor_range=(0.9, 1.
 
     # Noise Injection
     for col in df.columns:
-        if col != 'SubjectID' and col != 'GT depth':
+        if col != 'SubjectID' and col != 'GT_depth':
             noise = np.random.normal(0, noise_level, size=df[col].shape)
             augmented_data[col] += noise
 
@@ -549,7 +549,7 @@ def augment_data(df, noise_level=0.1, shift_max=5, scaling_factor_range=(0.9, 1.
     # Scaling
     scaling_factor = random.uniform(*scaling_factor_range)
     for col in df.columns:
-        if col != 'SubjectID' and col != 'GT depth':
+        if col != 'SubjectID' and col != 'GT_depth':
             augmented_data[col] *= scaling_factor
 
     # Example of checking for NaN values before processing
@@ -564,7 +564,7 @@ def binData(df):
 
     # Step 1: Bin the target variable
     num_bins = 60  # You can adjust this number
-    df['GT_depth_bin'] = pd.cut(df['GT depth'], bins=num_bins, labels=False)
+    df['GT_depth_bin'] = pd.cut(df['GT_depth'], bins=num_bins, labels=False)
 
     # Step 2: Calculate mean count per bin
     bin_counts = df['GT_depth_bin'].value_counts()
