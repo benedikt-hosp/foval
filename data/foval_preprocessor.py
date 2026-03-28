@@ -400,6 +400,24 @@ def getEyeVergenceAngle(row):
     # print("Depth fin ", depth_fin)
     return vergenceAngle, depth_fin
 
+def subject_wise_normalization_transform_only(data, unique_subjects, scaler):
+    """
+    Wendet den bereits gefitteten Scaler auf Val-Daten an — kein fit_transform!
+    """
+    normalized_data_list = []
+    for subject in unique_subjects:
+        subject_data = data[data['SubjectID'] == subject]
+        features = subject_data.drop(columns=['SubjectID', 'Gt_Depth'])
+        
+        # NUR transform, nicht fit_transform
+        normalized_features = scaler.transform(features)
+        
+        subject_data_normalized = pd.DataFrame(normalized_features, columns=features.columns)
+        subject_data_normalized['SubjectID'] = subject_data['SubjectID'].values
+        subject_data_normalized['Gt_Depth'] = subject_data['Gt_Depth'].values
+        normalized_data_list.append(subject_data_normalized)
+    
+    return pd.concat(normalized_data_list, ignore_index=True)
 
 def subject_wise_normalization(data, unique_subjects, scaler):
     normalized_data_list = []
@@ -446,7 +464,7 @@ def normalize_subject_data(subject_data, scaler):
 #     return training_set_normalized, validation_set_normalized
 #
 
-def createFeatures(data_in, isGIW=False):
+def createFeatures(data_in, isGIW=False, is_train=False, dataset=None):
     if isGIW:
         # Calculate vergence depth for rows where depth is unknown
         data_in['Vergence_Angle'], data_in['Vergence_Depth'] = zip(
@@ -455,8 +473,13 @@ def createFeatures(data_in, isGIW=False):
         data_in['Vergence_Angle'], data_in['Vergence_Depth'] = zip(*data_in.apply(getEyeVergenceAngle, axis=1))
 
     # 1. Depth Normalization
-    max_depth = data_in['Vergence_Depth'].max()
-    min_depth = data_in['Vergence_Depth'].min()
+    
+    if is_train:
+        min_depth = data_in['Vergence_Depth'].min()
+        max_depth = data_in['Vergence_Depth'].max()
+        dataset.vergence_depth_range = (min_depth, max_depth)  # speichern
+    else:
+        min_depth, max_depth = dataset.vergence_depth_range    # aus Training verwenden
 
     data_in['Normalized_Depth'] = (data_in['Vergence_Depth'] - min_depth) / (max_depth - min_depth)
 
@@ -477,10 +500,16 @@ def createFeatures(data_in, isGIW=False):
         (data_in['World_Gaze_Direction_R_Y'] - data_in['World_Gaze_Direction_L_Y']) ** 2)
 
     # 5. Normalized Vergence Angle
-    max_angle = data_in['Vergence_Angle'].max()
-    min_angle = data_in['Vergence_Angle'].min()
+    if is_train:
+        min_angle = data_in['Vergence_Angle'].min()
+        max_angle = data_in['Vergence_Angle'].max()
+        dataset.vergence_angle_range = (min_angle, max_angle)  # speichern
+    else:
+        min_angle, max_angle = dataset.vergence_angle_range    # aus Training verwenden
+
     data_in['Normalized_Vergence_Angle'] = 2 * (
-            (data_in['Vergence_Angle'] - min_angle) / (max_angle - min_angle)) - 1
+        (data_in['Vergence_Angle'] - min_angle) / (max_angle - min_angle)) - 1
+
 
     # 6. Difference in World Gaze Direction
     data_in['Delta_Gaze_X'] = data_in['World_Gaze_Direction_R_X'] - data_in['World_Gaze_Direction_L_X']
@@ -621,7 +650,7 @@ def createFeatures(data_in, isGIW=False):
     return data_in
 
 
-def createFeatures_new(data_in):
+def createFeatures_new(data_in, is_train=False, dataset=None):
     data_in['Vergence_Angle'], data_in['Vergence_Depth'] = zip(*data_in.apply(getEyeVergenceAngle, axis=1))
 
     # 1. Depth Normalization

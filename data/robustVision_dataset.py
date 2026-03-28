@@ -14,7 +14,7 @@ import warnings
 
 from data.AbstractDatasetClass import AbstractDatasetClass
 from data.foval_preprocessor import remove_outliers_in_labels, binData, createFeatures, \
-    detect_and_remove_outliers_in_features_iqr, clean_data, global_normalization, subject_wise_normalization, \
+    detect_and_remove_outliers_in_features_iqr, clean_data, subject_wise_normalization, \
     separate_features_and_targets
 from data.utilities import create_lstm_tensors_dataset, create_dataloaders_dataset
 
@@ -29,6 +29,12 @@ class RobustVisionDataset(AbstractDatasetClass):
         Initialize the RobustVisionDataset class.
 
         """
+
+        self.global_scaler = None          # NEU
+        self.subject_scaler = None         # NEU (umbenennen, war lokal)
+        self.vergence_depth_range = None   # NEU
+        self.vergence_angle_range = None   # NEU
+
         self.dataset_name = "robustvision"
         self.input_data = None
         self.subject_list = None
@@ -37,9 +43,10 @@ class RobustVisionDataset(AbstractDatasetClass):
         self.best_transformers = None
         self.minDepth = 0.35  # in meter
         self.maxDepth = 3
-        self.subject_scaler = RobustScaler()  # or any other scaler
+        # self.subject_scaler = RobustScaler()  # or any other scaler
         self.feature_scaler = None
         self.isGIW= False # für mixed muss das auf True stehen sonst False
+
 
         self.target_scaler = None
         self.target_column_name = 'Gt_Depth'
@@ -129,35 +136,38 @@ class RobustVisionDataset(AbstractDatasetClass):
         return self.input_data
 
     # 2.
-    def create_features(self, data_in):
-        """
-        Generate features from the input data.
-
-        :param data_in: Input dataframe.
-        :return: Dataframe with additional features.
-        @param data_in:
-        @return:
-        """
-        data_in = createFeatures(data_in, isGIW=self.isGIW)
-
+    def create_features(self, data_in, is_train=True):
+        data_in = createFeatures(
+            data_in,
+            isGIW=self.isGIW,
+            is_train=is_train,
+            dataset=self   # Dataset-Objekt übergeben damit Min/Max gespeichert werden kann
+        )
         return data_in
+    
 
-    # 3.
-    def normalize_data(self, data):
+    def normalize_data(self, data, is_train=True):
+        features = data.drop(columns=['SubjectID', 'Gt_Depth'])
 
-        # Apply global normalization first
-        data_set_in = global_normalization(data)
+        # --- Global Normalization (Fix 1) ---
+        if is_train:
+            self.global_scaler = RobustScaler()
+            normalized = self.global_scaler.fit_transform(features)
+        else:
+            normalized = self.global_scaler.transform(features)
 
-        # Then proceed with the existing subject-wise normalization
-        unique_subjects = data_set_in['SubjectID'].unique()
+        data_normalized = pd.DataFrame(normalized, columns=features.columns)
+        data_normalized['SubjectID'] = data['SubjectID'].values
+        data_normalized['Gt_Depth'] = data['Gt_Depth'].values
 
-        # Choose your scaler for subject-wise normalization
+        # --- Subject-wise Normalization (original) ---
+        unique_subjects = data_normalized['SubjectID'].unique()
         subject_scaler = RobustScaler()
+        data_normalized = subject_wise_normalization(
+            data_normalized, unique_subjects, subject_scaler
+        )
 
-        # Apply subject-wise normalization
-        dataset_in_normalized = subject_wise_normalization(data_set_in, unique_subjects, subject_scaler)
-
-        return dataset_in_normalized
+        return data_normalized
 
     # 4. A (Traininig data)
     def calculate_transformations_for_features(self, data_in):
@@ -346,10 +356,12 @@ class RobustVisionDataset(AbstractDatasetClass):
             raise ValueError(f"No data found for subjects: {subjects}")
 
         # Feature creation and normalization
-        data = self.create_features(data)
+        data = self.create_features(data, is_train=is_train)
         # if is_train:
         #     data.to_csv('checkpoint_features_2.csv')
-        data = self.normalize_data(data)
+        #data = self.normalize_data(data)
+        data = self.normalize_data(data, is_train=is_train)  # is_train weitergeben
+
 
         # Apply transformations if necessary
         if is_train:

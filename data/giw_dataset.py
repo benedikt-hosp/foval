@@ -15,7 +15,7 @@ import warnings
 
 from data.AbstractDatasetClass import AbstractDatasetClass
 from data.foval_preprocessor import remove_outliers_in_labels, binData, createFeatures, \
-    detect_and_remove_outliers_in_features_iqr, clean_data, global_normalization, subject_wise_normalization, \
+    detect_and_remove_outliers_in_features_iqr, clean_data, subject_wise_normalization, \
     separate_features_and_targets
 from data.utilities import create_lstm_tensors_dataset, create_dataloaders_dataset
 
@@ -38,7 +38,10 @@ class GIWDataset(AbstractDatasetClass):
         self.trial_name = trial_name
         self.input_data = None
         self.target_column_name = 'Gt_Depth'
-        self.input_data = None
+        self.isGIW = True
+        self.global_scaler = None
+        self.vergence_depth_range = None
+        self.vergence_angle_range = None
         self.subject_list = None
         self.sequence_length = 10  # sequence_length
         self.data_dir = data_dir
@@ -177,33 +180,43 @@ class GIWDataset(AbstractDatasetClass):
         return ipd * 10
 
     # 2.
-    def create_features(self, data_in):
+    def create_features(self, data_in, is_train=True):
         """
         Generate features from the input data.
 
         :param data_in: Input dataframe.
+        :param is_train: Whether this is training data.
         :return: Dataframe with additional features.
-        @param data_in:
-        @return:
         """
-        data_in = createFeatures(data_in, isGIW=True)
+        data_in = createFeatures(
+            data_in,
+            isGIW=self.isGIW,
+            is_train=is_train,
+            dataset=self
+        )
 
         return data_in
 
     # 3.
-    def normalize_data(self, data):
+    def normalize_data(self, data, is_train=True):
 
         # Apply global normalization first
-        data_set_in = global_normalization(data)
+        features = data.drop(columns=['SubjectID', 'Gt_Depth'])
+
+        if is_train:
+            self.global_scaler = RobustScaler()
+            normalized = self.global_scaler.fit_transform(features)
+        else:
+            normalized = self.global_scaler.transform(features)
+
+        data_normalized = pd.DataFrame(normalized, columns=features.columns)
+        data_normalized['SubjectID'] = data['SubjectID'].values
+        data_normalized['Gt_Depth'] = data['Gt_Depth'].values
 
         # Then proceed with the existing subject-wise normalization
-        unique_subjects = data_set_in['SubjectID'].unique()
-
-        # Choose your scaler for subject-wise normalization
+        unique_subjects = data_normalized['SubjectID'].unique()
         subject_scaler = RobustScaler()
-
-        # Apply subject-wise normalization
-        dataset_in_normalized = subject_wise_normalization(data_set_in, unique_subjects, subject_scaler)
+        dataset_in_normalized = subject_wise_normalization(data_normalized, unique_subjects, subject_scaler)
 
         return dataset_in_normalized
 
@@ -391,10 +404,10 @@ class GIWDataset(AbstractDatasetClass):
             raise ValueError(f"No data found for subjects: {subjects}")
 
         # Feature creation and normalization
-        data = self.create_features(data)
+        data = self.create_features(data, is_train=is_train)
         # if is_train:
         #     data.to_csv('checkpoint_features_2.csv')
-        data = self.normalize_data(data)
+        data = self.normalize_data(data, is_train=is_train)
 
         # Apply transformations if necessary
         if is_train:
