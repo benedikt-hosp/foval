@@ -4,3 +4,5 @@ __pycache__/
 Archiv.zip
 results/
 .claude/
+hpo_results.db
+foval_hpo.zip
